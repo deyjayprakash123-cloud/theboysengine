@@ -2,6 +2,9 @@ import urllib.parse
 import re
 import random
 import requests
+import subprocess
+import platform
+import threading
 from flask import Flask, request, Response
 from cryptography.fernet import Fernet
 
@@ -26,7 +29,7 @@ def encrypt_data(text):
 PROXY_POOL = []
 
 def fetch_free_proxies():
-    """Automatically scrapes fresh, free proxies from the web on startup."""
+    """Automatically scrapes fresh, free SOCKS5 proxies from the web on startup."""
     print("🌍 Scraping fresh public proxies... Please wait.")
     try:
         url = "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt"
@@ -63,6 +66,10 @@ def get_headers():
 
 def rewrite_html(html_content, base_url):
     """Intercepts HTML and forces all links to route back through the proxy."""
+    
+    # Destroys 'target="_blank"' so links never force-open a new, unproxied Chrome tab
+    html_content = re.sub(r'target=[\'"]_blank[\'"]', '', html_content, flags=re.IGNORECASE)
+
     def replacer(match):
         attr, quote, link = match.group(1), match.group(2), match.group(3)
         if link.startswith(("data:", "javascript:", "#", "mailto:")): 
@@ -117,7 +124,6 @@ def proxy_route():
 
     # PHASE 2: THE UNBREAKABLE FALLBACK
     # If all proxies fail, it silently establishes a direct, HTTPS-encrypted connection.
-    # You will NEVER see an error screen again.
     try:
         print("⚠️ [SYSTEM OVERRIDE]: Proxies dead. Establishing direct encrypted HTTPS tunnel.")
         resp = requests.get(target_url, headers=get_headers(), stream=True, timeout=10)
@@ -162,7 +168,7 @@ def home():
     return f'''
         <html>
         <body style="text-align:center; padding-top:100px; font-family:monospace; background:#000; color:#00ff00;">
-            <h1 style="font-size:54px; margin-bottom:10px;">GHOST ENGINE v7.0</h1>
+            <h1 style="font-size:54px; margin-bottom:10px;">GHOST ENGINE v8.0</h1>
             <p style="font-size:18px;">AES-256 Log Encryption | Unbreakable Fallback System | {proxy_status}</p>
             
             <div style="background:#111; border:1px solid #00ff00; padding:40px; border-radius:10px; display:inline-block; margin-top:30px; width: 600px;">
@@ -187,6 +193,24 @@ def home():
     '''
 
 # ==========================================
+# MODULE 4: AUTO-INCOGNITO LAUNCHER
+# ==========================================
+def open_incognito():
+    """Talks to the OS to force Google Chrome open in a private window."""
+    target_url = "http://127.0.0.1:5000"
+    os_name = platform.system()
+    
+    try:
+        if os_name == 'Windows':
+            subprocess.Popen(['cmd', '/c', 'start', 'chrome', '--incognito', target_url])
+        elif os_name == 'Darwin': 
+            subprocess.Popen(['open', '-a', 'Google Chrome', '--args', '--incognito', target_url])
+        elif os_name == 'Linux':
+            subprocess.Popen(['google-chrome', '--incognito', target_url])
+    except Exception as e:
+        print(f"⚠️ Could not auto-launch Incognito: {e}. Please open it manually.")
+
+# ==========================================
 # SYSTEM STARTUP
 # ==========================================
 if __name__ == '__main__':
@@ -195,4 +219,8 @@ if __name__ == '__main__':
     print("🚀 GHOST ENGINE ONLINE: http://127.0.0.1:5000")
     print(f"🔑 Session Key: {SESSION_KEY.decode('utf-8')}")
     print("=====================================================\n")
+    
+    # Wait 1.5 seconds for Flask to boot, then auto-launch Chrome Incognito
+    threading.Timer(1.5, open_incognito).start()
+    
     app.run(port=5000, debug=True, use_reloader=False)
